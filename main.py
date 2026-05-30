@@ -10,6 +10,35 @@ from schemas import FinalTradingDecision
 from openinference.instrumentation.openai_agents import OpenAIAgentsInstrumentor
 from langfuse import get_client
 
+# Asynchronous Database and Session Imports
+from sqlalchemy import Column, Integer, String, DateTime, Text
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.orm import declarative_base
+from datetime import datetime, timezone
+from agents.extensions.memory.sqlalchemy_session import SQLAlchemySession
+
+# ---------------------------------------------------------
+# Declarative Relational Database Models
+# ---------------------------------------------------------
+Base = declarative_base()
+
+class TradingHistory(Base):
+    __tablename__ = 'trading_history'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    user_name = Column(String)
+    user_email = Column(String)
+    user_phone = Column(String)
+    ticker = Column(String)
+    action = Column(String)
+    risk_status = Column(String)
+    stable_capital = Column(String)
+    budget_allocation = Column(String)
+    take_profit = Column(String)
+    stop_loss = Column(String)
+    justification = Column(Text)
+
 # ---------------------------------------------------------
 # Load environment and configure
 # ---------------------------------------------------------
@@ -148,13 +177,13 @@ manager_agent = Agent(
         "5. If the Risk Manager Agent rejects your proposal (verdict is 'REJECTED'), you must override your decision to 'HOLD'.\n"
         "6. CALCULATE ADJUSTED TARGET EXIT BOUNDARIES (TP/SL):\n"
         "   If the final system action is verified as a BUY or STRONG BUY, you must identify the active timeframe (interval) variable "
-        "   and extract the exact entry bounds from the latest close price (entry price) using this strict compliance matrix:\n"
+        "   and calculate the exact numerical target prices based on the latest Close price (entry price) using this strict compliance matrix:\n"
         "   - If Timeframe is '15m': Set Stop Loss at -1.0% (entry * 0.99) and Take Profit at +2.0% (entry * 1.02).\n"
         "   - If Timeframe is '1h' : Set Stop Loss at -2.5% (entry * 0.975) and Take Profit at +5.0% (entry * 1.05).\n"
         "   - If Timeframe is '4h' : Set Stop Loss at -4.0% (entry * 0.96) and Take Profit at +8.0% (entry * 1.08).\n"
         "   - If Timeframe is '1d' : Set Stop Loss at -8.0% (entry * 0.92) and Take Profit at +15.0% (entry * 1.15).\n"
-        "   Format both values as a dollar amount and percentage (e.g. \"$108.00 (+8.0%)\"). "
-        "   If the final action is HOLD, SELL, or STRONG SELL, set both exit targets to \"N/A\".\n"
+        "   Both values must be calculated as plain numerical float numbers rounded to 2 decimal places. "
+        "   If the final action is HOLD, SELL, or STRONG SELL, set both TAKE_PROFIT and STOP_LOSS to 0.0.\n"
         "7. Provide the final formatted package decision. It MUST be a single raw JSON block (no markdown, no backticks) conforming to this schema:\n"
         "{\n"
         "  \"ticker\": \"TICKER_SYMBOL\",\n"
@@ -162,8 +191,8 @@ manager_agent = Agent(
         "  \"risk_status\": \"Risk Manager verdict (APPROVED or REJECTED)\",\n"
         "  \"stable_capital\": \"Available stable capital balance from Risk Manager (e.g. $10,000.00 USDT)\",\n"
         "  \"budget_allocation\": \"Exact capital allocation budget from Risk Manager (e.g. Allocate 5% ($500.00 USDT))\",\n"
-        "  \"take_profit\": \"Calculated target Take Profit price and percentage, or N/A\",\n"
-        "  \"stop_loss\": \"Calculated target Stop Loss price and percentage, or N/A\",\n"
+        "  \"TAKE_PROFIT\": float (calculated numerical Take Profit price target, or 0.0 if not applicable),\n"
+        "  \"STOP_LOSS\": float (calculated numerical Stop Loss price target, or 0.0 if not applicable),\n"
         "  \"justification\": \"Final combined reasoning explaining technical momentum, risk compliance, position allocation, and TP/SL target boundaries.\"\n"
         "}"
     ),
@@ -174,14 +203,41 @@ manager_agent = Agent(
 # ---------------------------------------------------------
 # Execution Engine
 # ---------------------------------------------------------
-async def run_trading_desk(ticker_input: str, interval: str, period: str, strategy: str):
+async def run_trading_desk(ticker_input: str, interval: str, period: str, strategy: str, user_name: str, user_email: str, user_phone: str):
+    engine = None
     try:
+        # Load Neon connection URL dynamically from environment, fallback to literal placeholder if not specified
+        env_url = os.getenv("neon_db")
+        if env_url:
+            # Upgrade standard protocol to async driver protocol
+            if env_url.startswith("postgresql://"):
+                connection_url = env_url.replace("postgresql://", "postgresql+psycopg://", 1)
+            else:
+                connection_url = env_url
+        else:
+            connection_url = "postgresql+psycopg://mr..ca:PASS@abs-pooler.us-east-2.aws.neon.tech/test-sess?sslmode=require&channel_binding=require"
+            
+        # Instantiate a durable async connection client referencing our target Neon connection URL
+        engine = create_async_engine(connection_url, echo=False)
+        
+        # Ensure our custom declarative tables are created in the database
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        
+        # Initialize the SQLAlchemySession module wrapper with a unique user-bound conversational tracking session string
+        session = SQLAlchemySession(
+            session_id=f"session_{user_email}",
+            engine=engine,
+            create_tables=True
+        )
+        
         result = await Runner.run(
             manager_agent, 
             input=(
                 f"Process trade opportunity for asset: '{ticker_input}' using strategy '{strategy}'. "
                 f"Please fetch market data using interval='{interval}' and lookback period='{period}'."
-            )
+            ),
+            session=session
         )
         
         # Strip markdown backticks if model generated them
@@ -205,10 +261,34 @@ async def run_trading_desk(ticker_input: str, interval: str, period: str, strate
         print(f"  * RISK COMPLIANCE  : {decision.risk_status}")
         print(f"  * STABLE CAPITAL   : {decision.stable_capital}")
         print(f"  * BUDGET ALLOCATION: {decision.budget_allocation}")
-        print(f"  * TAKE PROFIT TRGT : {decision.take_profit}")
-        print(f"  * STOP LOSS TARGET : {decision.stop_loss}")
+        print(f"  * TAKE PROFIT TRGT : ${decision.TAKE_PROFIT:.2f}" if decision.TAKE_PROFIT > 0 else f"  * TAKE PROFIT TRGT : N/A")
+        print(f"  * STOP LOSS TARGET : ${decision.STOP_LOSS:.2f}" if decision.STOP_LOSS > 0 else f"  * STOP LOSS TARGET : N/A")
         print(f"  * JUSTIFICATION    : {decision.justification}")
         print("="*70 + "\n")
+        
+        # Persist standard transactional outcomes using async session maker bound to database connection engine
+        try:
+            async_session = async_sessionmaker(engine, expire_on_commit=False)
+            async with async_session() as db_session:
+                new_record = TradingHistory(
+                    user_name=user_name,
+                    user_email=user_email,
+                    user_phone=user_phone,
+                    ticker=decision.ticker,
+                    action=decision.action,
+                    risk_status=decision.risk_status,
+                    stable_capital=decision.stable_capital,
+                    budget_allocation=decision.budget_allocation,
+                    take_profit=str(decision.TAKE_PROFIT),
+                    stop_loss=str(decision.STOP_LOSS),
+                    justification=decision.justification
+                )
+                db_session.add(new_record)
+                await db_session.commit()
+                print("✅ [Database] Trading history record successfully persisted to Neon PostgreSQL.")
+        except Exception as db_err:
+            print(f"❌ [Database Error] Failed to persist trading record: {db_err}")
+            
         return decision
         
     except Exception as e:
@@ -216,11 +296,44 @@ async def run_trading_desk(ticker_input: str, interval: str, period: str, strate
         if 'result' in locals() and hasattr(result, 'final_output'):
             print("Raw Agent response was:")
             print(result.final_output)
+    finally:
+        # Ensure that await engine.dispose() executes cleanly on loop closure
+        if engine:
+            try:
+                await engine.dispose()
+                print("🔌 [Database] Asynchronous database connection engine disposed cleanly.")
+            except Exception as dispose_err:
+                print(f"🔌 [Database] Asynchronous database connection engine disposed with warning: {dispose_err}")
 
 # ---------------------------------------------------------
 # Interactive Gateway Interface
 # ---------------------------------------------------------
 if __name__ == "__main__":
+    # Mock the frontend login identity collection gateway at initial boot
+    print("\n" + "="*75)
+    print("      OPERATOR LOGIN IDENTITY MIGRATION GATEWAY (MOCK FRONTEND)")
+    print("="*75)
+    user_name_input = ""
+    while not user_name_input:
+        user_name_input = input("[Login] Enter Operator Name: ").strip()
+        if not user_name_input:
+            print("[Warning] Operator Name is required.")
+            
+    user_email_input = ""
+    while not user_email_input:
+        user_email_input = input("[Login] Enter Email Address: ").strip()
+        if not user_email_input:
+            print("[Warning] Email Address is required.")
+            
+    user_phone_input = ""
+    while not user_phone_input:
+        user_phone_input = input("[Login] Enter Phone Number: ").strip()
+        if not user_phone_input:
+            print("[Warning] Phone Number is required.")
+    print("-"*75)
+    print("Operator credentials logged successfully. Access granted.")
+    print("="*75)
+
     # Quantitative Desk Router Greeting
     print("\n" + "="*75)
     print("      AUTOMATED MULTI-AGENTIC QUANTITATIVE TRADING DESK GATEWAY")
@@ -302,5 +415,5 @@ if __name__ == "__main__":
     print("[Router] Executing multi-agent validation pipeline. Please stand by...")
     print("="*75)
     
-    # Run the trading desk pipeline
-    asyncio.run(run_trading_desk(ticker, interval, period, strategy))
+    # Run the trading desk pipeline passing operator metadata down the chain
+    asyncio.run(run_trading_desk(ticker, interval, period, strategy, user_name_input, user_email_input, user_phone_input))
