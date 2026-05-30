@@ -57,18 +57,31 @@ analyst_agent = Agent(
 )
 
 # Agent 2: The Independent Risk Guardrail
-# Audits the trade recommendations based on strict risk criteria
+# Audits the trade recommendations based on strict risk criteria and computes position sizing
 risk_agent = Agent(
     name="Risk Manager Agent",
     instructions=(
-        "You are an independent automated risk control block. Audit proposed trading actions against rules:\n"
-        "1. Reject 'BUY' entries if data indicates a steep, uninterrupted downward cascade (Falling Knife).\n"
-        "2. Reject entries if price vectors show erratic, unpredictable spikes without support.\n"
-        "Return your audit verdict as a raw JSON block conforming to this schema:\n"
-        "{\n"
-        "  \"verdict\": \"APPROVED\" | \"REJECTED\",\n"
-        "  \"justification\": \"Single-sentence technical justification explaining safety math.\"\n"
-        "}"
+        "You are the ultimate guardrail of the system. Your primary objective is to audit "
+        "the Trading Desk Manager's signal and compute the exact monetary Position Size using strict portfolio rules.\n"
+        "1. CAPTURE TOTAL STABLE LIQUIDITY:\n"
+        "   Identify the available stable cash account balance (default to $10,000.00 USDT if not specified). "
+        "   You must ONLY consider flat fiat (USD) or stablecoins (USDT, USDC, BUSD). "
+        "   Completely EXCLUDE and ignore any volatile risk assets (like existing balances of BTC, ETH, or stocks).\n"
+        "2. EVALUATE PROBABILITY & COMPUTE ALLOCATION:\n"
+        "   Apply a mathematical position-sizing model based on the trade signal probability tier:\n"
+        "   - If signal is [STRONG BUY] or [STRONG SELL] (High Probability): Approve and recommend allocating exactly 5% of the total stable balance.\n"
+        "   - If signal is [BUY] or [SELL] (Medium Probability): Approve and recommend allocating exactly 2% of the total stable balance.\n"
+        "   - If signal is [HOLD] (Low Probability/No Setup): Reject/block the trade and allocate 0%.\n"
+        "3. STRUCTURE THE FINANCIAL OUTPUT:\n"
+        "   Return your evaluation strictly as a raw JSON block conforming to this schema:\n"
+        "   {\n"
+        "     \"stable_capital\": \"Current Account Stable Capital (e.g. $10,000.00 USDT)\",\n"
+        "     \"risk_tier\": \"High Probability | Medium Probability | Zero Allocation\",\n"
+        "     \"verdict\": \"APPROVED\" | \"REJECTED\",\n"
+        "     \"action_command\": \"STRONG BUY | BUY | HOLD | SELL | STRONG SELL\",\n"
+        "     \"budget_allocation\": \"Allocate X% ($Y.YY USDT)\",\n"
+        "     \"justification\": \"Compliance justification explaining why this capital size matches the asset's risk profile.\"\n"
+        "   }"
     ),
     model=gemini_model
 )
@@ -97,19 +110,27 @@ risk_tool = risk_agent.as_tool(
 manager_agent = Agent(
     name="Trading Desk Manager",
     instructions=(
-        "You orchestrate the trading workflow.\n"
-        "1. You will receive a target ticker, interval, lookback period, and strategy name in the prompt.\n"
-        "2. Call `analyze_market_data` tool with the ticker, period, and interval to get technical indicators.\n"
-        "3. Based on the momentum from the analysis, formulate an initial trade action "
-        "(e.g., 'bullish' momentum -> BUY, 'bearish' momentum -> SELL, 'neutral' momentum -> HOLD).\n"
-        "4. Call `evaluate_trading_risk` tool with your proposed action and the ticker to audit it.\n"
-        "5. If the risk verdict is REJECTED, override your decision to HOLD.\n"
+        "You are the Trading Desk Manager (Strategy Orchestrator), responsible for generating "
+        "the directional trade signal based on the report provided by the Market Data Analyst.\n"
+        "1. Extract the target ticker, interval, lookback period, and strategy name from the prompt.\n"
+        "2. Call `analyze_market_data` tool with the ticker, period, and interval to fetch raw pricing and indicator calculations.\n"
+        "3. Review the technical indicators (EMA crossovers, RSI levels, trend directions) and classify the trade "
+        "opportunity into exactly ONE of these five strategy tiers:\n"
+        "   - STRONG BUY: Extreme upward momentum, EMA9 healthily above EMA21, RSI not yet overbought.\n"
+        "   - BUY: Moderate upward trend or stable support baseline established.\n"
+        "   - HOLD: No clear direction, sideways movement, high uncertainty, or asset is overbought/oversold.\n"
+        "   - SELL: Moderate downward trend breaking immediate support lines.\n"
+        "   - STRONG SELL: Severe downward breakdown, EMA9 well below EMA21, massive structural panic.\n"
+        "4. Call `evaluate_trading_risk` tool with your chosen strategy signal tier (e.g., 'STRONG BUY') and the analyst summary to audit it.\n"
+        "5. If the Risk Manager Agent rejects your proposal (verdict is 'REJECTED'), you must override your decision to 'HOLD'.\n"
         "6. Provide the final formatted package decision. It MUST be a single raw JSON block (no markdown, no backticks) conforming to this schema:\n"
         "{\n"
         "  \"ticker\": \"TICKER_SYMBOL\",\n"
-        "  \"action\": \"BUY\" | \"SELL\" | \"HOLD\",\n"
+        "  \"action\": \"STRONG BUY\" | \"BUY\" | \"HOLD\" | \"SELL\" | \"STRONG SELL\",\n"
         "  \"risk_status\": \"Risk Manager verdict (APPROVED or REJECTED)\",\n"
-        "  \"justification\": \"Final combined reasoning explaining both the technical momentum and risk audit outcome.\"\n"
+        "  \"stable_capital\": \"Available stable capital balance from Risk Manager (e.g. $10,000.00 USDT)\",\n"
+        "  \"budget_allocation\": \"Exact capital allocation budget from Risk Manager (e.g. Allocate 5% ($500.00 USDT))\",\n"
+        "  \"justification\": \"Final combined reasoning explaining both the technical momentum and risk audit allocation outcome.\"\n"
         "}"
     ),
     tools=[analyst_tool, risk_tool],
@@ -145,10 +166,12 @@ async def run_trading_desk(ticker_input: str, interval: str, period: str, strate
         print("\n" + "="*70)
         print("                 FINAL QUANTITATIVE SYSTEM DECISION")
         print("="*70)
-        print(f"  * ASSET TICKER   : {decision.ticker}")
-        print(f"  * SYSTEM ACTION  : {decision.action}")
-        print(f"  * RISK COMPLIANCE: {decision.risk_status}")
-        print(f"  * JUSTIFICATION  : {decision.justification}")
+        print(f"  * ASSET TICKER     : {decision.ticker}")
+        print(f"  * SYSTEM ACTION    : {decision.action}")
+        print(f"  * RISK COMPLIANCE  : {decision.risk_status}")
+        print(f"  * STABLE CAPITAL   : {decision.stable_capital}")
+        print(f"  * BUDGET ALLOCATION: {decision.budget_allocation}")
+        print(f"  * JUSTIFICATION    : {decision.justification}")
         print("="*70 + "\n")
         return decision
         
