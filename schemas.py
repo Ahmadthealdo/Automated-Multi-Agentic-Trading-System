@@ -3,6 +3,7 @@ from typing import Literal
 
 class MarketAnalysis(BaseModel):
     ticker: str
+    current_price: float = Field(description="The absolute latest actual closing price of the asset fetched by the tool")
     price_variance_pct: float = Field(description="The percentage variance over 5 days")
     momentum: Literal["bullish", "bearish", "neutral"]
     summary: str = Field(description="A factual analysis of the 5-day market trend.")
