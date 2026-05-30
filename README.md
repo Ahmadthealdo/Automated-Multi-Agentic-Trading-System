@@ -1,4 +1,4 @@
-# 📊 Automated: A Multi-Agentic Trading System
+# 📊 Automated Multi-Agentic Trading System
 
 [![Python](https://img.shields.io/badge/Backend-Python-3776AB.svg?style=flat-square&logo=python)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688.svg?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com/)
