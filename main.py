@@ -123,14 +123,25 @@ manager_agent = Agent(
         "   - STRONG SELL: Severe downward breakdown, EMA9 well below EMA21, massive structural panic.\n"
         "4. Call `evaluate_trading_risk` tool with your chosen strategy signal tier (e.g., 'STRONG BUY') and the analyst summary to audit it.\n"
         "5. If the Risk Manager Agent rejects your proposal (verdict is 'REJECTED'), you must override your decision to 'HOLD'.\n"
-        "6. Provide the final formatted package decision. It MUST be a single raw JSON block (no markdown, no backticks) conforming to this schema:\n"
+        "6. CALCULATE ADJUSTED TARGET EXIT BOUNDARIES (TP/SL):\n"
+        "   If the final system action is verified as a BUY or STRONG BUY, you must identify the active timeframe (interval) variable "
+        "   and extract the exact entry bounds from the latest close price (entry price) using this strict compliance matrix:\n"
+        "   - If Timeframe is '15m': Set Stop Loss at -1.0% (entry * 0.99) and Take Profit at +2.0% (entry * 1.02).\n"
+        "   - If Timeframe is '1h' : Set Stop Loss at -2.5% (entry * 0.975) and Take Profit at +5.0% (entry * 1.05).\n"
+        "   - If Timeframe is '4h' : Set Stop Loss at -4.0% (entry * 0.96) and Take Profit at +8.0% (entry * 1.08).\n"
+        "   - If Timeframe is '1d' : Set Stop Loss at -8.0% (entry * 0.92) and Take Profit at +15.0% (entry * 1.15).\n"
+        "   Format both values as a dollar amount and percentage (e.g. \"$108.00 (+8.0%)\"). "
+        "   If the final action is HOLD, SELL, or STRONG SELL, set both exit targets to \"N/A\".\n"
+        "7. Provide the final formatted package decision. It MUST be a single raw JSON block (no markdown, no backticks) conforming to this schema:\n"
         "{\n"
         "  \"ticker\": \"TICKER_SYMBOL\",\n"
         "  \"action\": \"STRONG BUY\" | \"BUY\" | \"HOLD\" | \"SELL\" | \"STRONG SELL\",\n"
         "  \"risk_status\": \"Risk Manager verdict (APPROVED or REJECTED)\",\n"
         "  \"stable_capital\": \"Available stable capital balance from Risk Manager (e.g. $10,000.00 USDT)\",\n"
         "  \"budget_allocation\": \"Exact capital allocation budget from Risk Manager (e.g. Allocate 5% ($500.00 USDT))\",\n"
-        "  \"justification\": \"Final combined reasoning explaining both the technical momentum and risk audit allocation outcome.\"\n"
+        "  \"take_profit\": \"Calculated target Take Profit price and percentage, or N/A\",\n"
+        "  \"stop_loss\": \"Calculated target Stop Loss price and percentage, or N/A\",\n"
+        "  \"justification\": \"Final combined reasoning explaining technical momentum, risk compliance, position allocation, and TP/SL target boundaries.\"\n"
         "}"
     ),
     tools=[analyst_tool, risk_tool],
@@ -171,6 +182,8 @@ async def run_trading_desk(ticker_input: str, interval: str, period: str, strate
         print(f"  * RISK COMPLIANCE  : {decision.risk_status}")
         print(f"  * STABLE CAPITAL   : {decision.stable_capital}")
         print(f"  * BUDGET ALLOCATION: {decision.budget_allocation}")
+        print(f"  * TAKE PROFIT TRGT : {decision.take_profit}")
+        print(f"  * STOP LOSS TARGET : {decision.stop_loss}")
         print(f"  * JUSTIFICATION    : {decision.justification}")
         print("="*70 + "\n")
         return decision
