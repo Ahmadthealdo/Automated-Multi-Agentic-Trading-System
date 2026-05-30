@@ -1,12 +1,17 @@
 # 📊 Automated: A Multi-Agentic Trading System
 
-[![Python FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688.svg?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com/)
-[![Tailwind CSS](https://img.shields.io/badge/Frontend-TailwindCSS-38BDF8.svg?style=flat-square&logo=tailwindcss)](https://tailwindcss.com/)
-[![Neon PostgreSQL](https://img.shields.io/badge/Database-Neon_Postgres-00E676.svg?style=flat-square&logo=postgresql)](https://neon.tech/)
-[![Langfuse Tracing](https://img.shields.io/badge/Observability-Langfuse-FF5A5F.svg?style=flat-square&logo=lighthouse)](https://langfuse.com/)
+[![Python](https://img.shields.io/badge/Backend-Python-3776AB.svg?style=flat-square&logo=python)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688.svg?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com/)
+[![OpenAI Agents SDK](https://img.shields.io/badge/Backend-OpenAI_Agents_SDK-412991.svg?style=flat-square&logo=openai)](https://openai.github.io/openai-agents-python/)
+[![Agent Skills](https://img.shields.io/badge/Backend-Agent_Skills-7C3AED.svg?style=flat-square&logo=openai)](https://platform.openai.com/docs)
+
+[![HTML5](https://img.shields.io/badge/Frontend-HTML5-E34F26.svg?style=flat-square&logo=html5)](https://developer.mozilla.org/docs/Web/HTML)
+[![JavaScript](https://img.shields.io/badge/Frontend-JavaScript-F7DF1E.svg?style=flat-square&logo=javascript)](https://developer.mozilla.org/docs/Web/JavaScript)
+[![Tailwind CSS](https://img.shields.io/badge/Frontend-Tailwind_CSS-38BDF8.svg?style=flat-square&logo=tailwindcss)](https://tailwindcss.com/)
+
+[![Neon PostgreSQL](https://img.shields.io/badge/Database-Neon_PostgreSQL-00E676.svg?style=flat-square&logo=postgresql)](https://neon.tech/)
+[![Langfuse](https://img.shields.io/badge/Observability-Langfuse-FF5A5F.svg?style=flat-square)](https://langfuse.com/)
 [![yfinance](https://img.shields.io/badge/Data-yfinance-FFCC00.svg?style=flat-square&logo=python)](https://github.com/ranaroussi/yfinance)
-[![OpenAI Agent SDK](https://img.shields.io/badge/AI-OpenAI_Agent_SDK-412991.svg?style=flat-square&logo=openai)](https://openai.github.io/openai-agents-python/)
-[![Agent Skills](https://img.shields.io/badge/Agents-Agent_Skills-7C3AED.svg?style=flat-square&logo=openai)](https://platform.openai.com/docs)
 
 An elite, high-performance full-stack portal built with **Python FastAPI**, **SQLAlchemy ORM**, **Pydantic Validation**, and a **Bloomberg-inspired, industrial-utilitarian dashboard**. This platform implements a decoupled, asynchronous multi-agent orchestration architecture powered by the **OpenAI Agents SDK** and managed with **`uv`**.
 
