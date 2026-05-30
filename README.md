@@ -5,6 +5,8 @@
 [![Neon PostgreSQL](https://img.shields.io/badge/Database-Neon_Postgres-00E676.svg?style=flat-square&logo=postgresql)](https://neon.tech/)
 [![Langfuse Tracing](https://img.shields.io/badge/Observability-Langfuse-FF5A5F.svg?style=flat-square&logo=lighthouse)](https://langfuse.com/)
 [![yfinance](https://img.shields.io/badge/Data-yfinance-FFCC00.svg?style=flat-square&logo=python)](https://github.com/ranaroussi/yfinance)
+[![OpenAI Agent SDK](https://img.shields.io/badge/AI-OpenAI_Agent_SDK-412991.svg?style=flat-square&logo=openai)](https://openai.github.io/openai-agents-python/)
+[![Agent Skills](https://img.shields.io/badge/Agents-Agent_Skills-7C3AED.svg?style=flat-square&logo=openai)](https://platform.openai.com/docs)
 
 An elite, high-performance full-stack portal built with **Python FastAPI**, **SQLAlchemy ORM**, **Pydantic Validation**, and a **Bloomberg-inspired, industrial-utilitarian dashboard**. This platform implements a decoupled, asynchronous multi-agent orchestration architecture powered by the **OpenAI Agents SDK** and managed with **`uv`**.
 
