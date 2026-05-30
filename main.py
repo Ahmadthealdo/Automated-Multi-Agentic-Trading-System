@@ -1,16 +1,39 @@
 import asyncio
 import os
 import json
-from dotenv import load_dotenv
-from agents import Agent, Runner, OpenAIChatCompletionsModel, AsyncOpenAI, set_tracing_disabled
+from dotenv import load_dotenv, find_dotenv
+from agents import Agent, Runner, OpenAIChatCompletionsModel, AsyncOpenAI
 from tools import fetch_market_data
 from schemas import FinalTradingDecision
 
-# Load environment variables from .env
-load_dotenv()
+# Observability and Telemetry Integration
+from openinference.instrumentation.openai_agents import OpenAIAgentsInstrumentor
+from langfuse import get_client
 
-# Disable telemetry/tracing to avoid 401 errors when OPENAI_API_KEY is not set
-set_tracing_disabled(True)
+# ---------------------------------------------------------
+# Load environment and configure
+# ---------------------------------------------------------
+load_dotenv(find_dotenv())  # Load local .env file
+
+# Instrumentation setup
+OpenAIAgentsInstrumentor().instrument()
+
+# Load environment variables
+os.getenv("LANGFUSE_PUBLIC_KEY")
+os.getenv("LANGFUSE_SECRET_KEY")
+os.getenv("LANGFUSE_HOST")
+
+# Initialize Langfuse client
+langfuse = get_client()
+
+# Verify connection
+try:
+    if langfuse.auth_check():
+        print("✅ Langfuse client is authenticated and ready!")
+    else:
+        print("❌ Authentication failed. Please check your credentials...")
+except Exception as e:
+    print(f"⚠️ Langfuse connection warning: {e}. Tracing will continue natively/locally.")
 
 # ---------------------------------------------------------
 # LLM Service Configuration
@@ -152,25 +175,25 @@ manager_agent = Agent(
 # Execution Engine
 # ---------------------------------------------------------
 async def run_trading_desk(ticker_input: str, interval: str, period: str, strategy: str):
-    result = await Runner.run(
-        manager_agent, 
-        input=(
-            f"Process trade opportunity for asset: '{ticker_input}' using strategy '{strategy}'. "
-            f"Please fetch market data using interval='{interval}' and lookback period='{period}'."
-        )
-    )
-    
-    # Strip markdown backticks if model generated them
-    text = result.final_output.strip()
-    if text.startswith("```"):
-        lines = text.splitlines()
-        if lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines[-1].startswith("```"):
-            lines = lines[:-1]
-        text = "\n".join(lines).strip()
-        
     try:
+        result = await Runner.run(
+            manager_agent, 
+            input=(
+                f"Process trade opportunity for asset: '{ticker_input}' using strategy '{strategy}'. "
+                f"Please fetch market data using interval='{interval}' and lookback period='{period}'."
+            )
+        )
+        
+        # Strip markdown backticks if model generated them
+        text = result.final_output.strip()
+        if text.startswith("```"):
+            lines = text.splitlines()
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines[-1].startswith("```"):
+                lines = lines[:-1]
+            text = "\n".join(lines).strip()
+            
         data = json.loads(text)
         decision = FinalTradingDecision(**data)
         
@@ -189,9 +212,10 @@ async def run_trading_desk(ticker_input: str, interval: str, period: str, strate
         return decision
         
     except Exception as e:
-        print(f"\n[Error] Failed to parse final decision JSON: {e}")
-        print("Raw Agent response was:")
-        print(result.final_output)
+        print(f"\n[Error] Failed to parse final decision JSON or execution crashed: {e}")
+        if 'result' in locals() and hasattr(result, 'final_output'):
+            print("Raw Agent response was:")
+            print(result.final_output)
 
 # ---------------------------------------------------------
 # Interactive Gateway Interface

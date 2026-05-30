@@ -93,3 +93,13 @@ To ensure the **Automated-Multi-Agentic-Trading-System** satisfies the rigorous 
 3. **Graceful Exception Truncation:** In the event of invalid asset tokens or data streaming timeouts, the underlying Python data tool catches the exception locally and pipes a structured error block (`"Error: Extraction Target Unreachable"`) back to the agent network, preventing thread crashes during live project demonstrations.
 
 ---
+
+## 6. Observability & Telemetry Framework (Langfuse Tracing)
+
+To ensure complete operational visibility, debugging capacity, and performance auditing, the system implements native **Langfuse Tracing**. Every transaction loop must be completely transparent.
+
+### 🔍 Telemetry Constraints
+1. **Trace Scope:** A single global trace must be initialized the moment the `Master Trading Desk Router` welcomes a user.
+2. **Nested Spans:** Each agent execution block (`Market Analyst Tool`, `Risk Manager Tool`) must run within its own nested execution span to log individual token usage and latency.
+3. **Tool Observation:** The Python `fetch_intraday_technical_analysis` execution data block must be tracked as a generation/tool event, capturing exact inputs (ticker, timeframe) and raw output text strings.
+4. **Payload Validation:** The final `### DATABASE INSERTION PAYLOAD` must be tagged as an execution output parameter inside Langfuse for instant monitoring before it gets pushed to the Neon Database.
