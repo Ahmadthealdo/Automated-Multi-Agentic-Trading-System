@@ -1,43 +1,29 @@
 import asyncio
 import os
 import json
+import re
+from datetime import datetime, timezone
 from dotenv import load_dotenv, find_dotenv
 from agents import Agent, Runner, OpenAIChatCompletionsModel, AsyncOpenAI
 from tools import fetch_market_data
-from schemas import FinalTradingDecision
+from schemas import FinalTradingDecision, UserSignup, UserLogin
 
 # Observability and Telemetry Integration
 from openinference.instrumentation.openai_agents import OpenAIAgentsInstrumentor
 from langfuse import get_client
 
 # Asynchronous Database and Session Imports
-from sqlalchemy import Column, Integer, String, DateTime, Text
+from sqlalchemy import Column, Integer, String, DateTime, Text, text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import declarative_base
-from datetime import datetime, timezone
 from agents.extensions.memory.sqlalchemy_session import SQLAlchemySession
 
-# ---------------------------------------------------------
-# Declarative Relational Database Models
-# ---------------------------------------------------------
-Base = declarative_base()
-
-class TradingHistory(Base):
-    __tablename__ = 'trading_history'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    user_name = Column(String)
-    user_email = Column(String)
-    user_phone = Column(String)
-    ticker = Column(String)
-    action = Column(String)
-    risk_status = Column(String)
-    stable_capital = Column(String)
-    budget_allocation = Column(String)
-    take_profit = Column(String)
-    stop_loss = Column(String)
-    justification = Column(Text)
+# FastAPI Web Hosting & Static Files Imports
+from fastapi import FastAPI, HTTPException, status, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import bcrypt
 
 # ---------------------------------------------------------
 # Load environment and configure
@@ -46,11 +32,6 @@ load_dotenv(find_dotenv())  # Load local .env file
 
 # Instrumentation setup
 OpenAIAgentsInstrumentor().instrument()
-
-# Load environment variables
-os.getenv("LANGFUSE_PUBLIC_KEY")
-os.getenv("LANGFUSE_SECRET_KEY")
-os.getenv("LANGFUSE_HOST")
 
 # Initialize Langfuse client
 langfuse = get_client()
@@ -85,11 +66,42 @@ gemini_model = OpenAIChatCompletionsModel(
 )
 
 # ---------------------------------------------------------
+# Declarative Relational Database Models
+# ---------------------------------------------------------
+Base = declarative_base()
+
+class TradingHistory(Base):
+    __tablename__ = 'trading_history'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    user_name = Column(String)
+    user_email = Column(String)
+    user_phone = Column(String)
+    ticker = Column(String)
+    action = Column(String)
+    risk_status = Column(String)
+    stable_capital = Column(String)
+    budget_allocation = Column(String)
+    take_profit = Column(String)
+    stop_loss = Column(String)
+    justification = Column(Text)
+
+class SystemUser(Base):
+    __tablename__ = 'system_users'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    full_name = Column(String, nullable=False)
+    email = Column(String, unique=True, nullable=False, index=True)
+    verified_phone = Column(String, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+# ---------------------------------------------------------
 # Define Specialized Subagents
 # ---------------------------------------------------------
 
 # Agent 1: The Specialized Data Analyst
-# Ingests market history and calculates indicators, returning technical summaries
 analyst_agent = Agent(
     name="Market Data Analyst",
     instructions=(
@@ -110,7 +122,6 @@ analyst_agent = Agent(
 )
 
 # Agent 2: The Independent Risk Guardrail
-# Audits the trade recommendations based on strict risk criteria and computes position sizing
 risk_agent = Agent(
     name="Risk Manager Agent",
     instructions=(
@@ -142,8 +153,6 @@ risk_agent = Agent(
 # ---------------------------------------------------------
 # Hierarchical "Agents-as-Tools" Wrapping
 # ---------------------------------------------------------
-# Convert sub-agents into clean tools. This allows the main manager to
-# retain conversation state and bypass Gemini's simultaneous function-call + JSON limitation.
 analyst_tool = analyst_agent.as_tool(
     tool_name="analyze_market_data",
     tool_description=(
@@ -176,17 +185,7 @@ manager_agent = Agent(
         "   - STRONG SELL: Severe downward breakdown, EMA9 well below EMA21, massive structural panic.\n"
         "4. Call `evaluate_trading_risk` tool with your chosen strategy signal tier (e.g., 'STRONG BUY') and the analyst summary to audit it.\n"
         "5. If the Risk Manager Agent rejects your proposal (verdict is 'REJECTED'), you must override your decision to 'HOLD'.\n"
-        "6. CALCULATE ADJUSTED TARGET EXIT BOUNDARIES (TP/SL):\n"
-        "   You are strictly forbidden from guessing, assuming, or utilizing hypothetical placeholder numbers for the asset entry cost. "
-        "   Look directly inside the `current_price` property field returned by the `analyze_market_data` tool handoff payload. "
-        "   Use that exact live decimal float value as your entry price variable baseline to execute your arithmetic calculations "
-        "   for Stop Loss and Take Profit bounds according to the strategy matrix rules:\n"
-        "   - If Timeframe is '15m': Set Stop Loss at -1.0% (entry * 0.99) and Take Profit at +2.0% (entry * 1.02).\n"
-        "   - If Timeframe is '1h' : Set Stop Loss at -2.5% (entry * 0.975) and Take Profit at +5.0% (entry * 1.05).\n"
-        "   - If Timeframe is '4h' : Set Stop Loss at -4.0% (entry * 0.96) and Take Profit at +8.0% (entry * 1.08).\n"
-        "   - If Timeframe is '1d' : Set Stop Loss at -8.0% (entry * 0.92) and Take Profit at +15.0% (entry * 1.15).\n"
-        "   Both values must be calculated as plain numerical float numbers rounded to 2 decimal places. "
-        "   If the final action is HOLD, SELL, or STRONG SELL, set both TAKE_PROFIT and STOP_LOSS to 0.0.\n"
+        "6. CALCULATE ADJUSTED TARGET EXIT BOUNDARIES (TP/SL): You are strictly forbidden from guessing, assuming, or utilizing hypothetical placeholder numbers for the asset entry cost. Look directly inside the `current_price` property field returned by the `analyze_market_data` tool handoff payload. Use that exact live decimal float value as your entry price variable baseline to execute your arithmetic calculations for Stop Loss and Take Profit bounds according to the strategy matrix rules (15m: -1%/+2% | 1h: -2.5%/+5% | 4h: -4%/+8% | 1d: -8%/+15%). Both values must be calculated as plain numerical float numbers rounded to 2 decimal places. If the final action is HOLD, SELL, or STRONG SELL, set both TAKE_PROFIT and STOP_LOSS to 0.0.\n"
         "7. Provide the final formatted package decision. It MUST be a single raw JSON block (no markdown, no backticks) conforming to this schema:\n"
         "{\n"
         "  \"ticker\": \"TICKER_SYMBOL\",\n"
@@ -204,7 +203,7 @@ manager_agent = Agent(
 )
 
 # ---------------------------------------------------------
-# Execution Engine
+# Execution Engine (Core Agent Runner Pipeline)
 # ---------------------------------------------------------
 async def run_trading_desk(ticker_input: str, interval: str, period: str, strategy: str, user_name: str, user_email: str, user_phone: str):
     engine = None
@@ -309,114 +308,267 @@ async def run_trading_desk(ticker_input: str, interval: str, period: str, strate
                 print(f"🔌 [Database] Asynchronous database connection engine disposed with warning: {dispose_err}")
 
 # ---------------------------------------------------------
-# Interactive Gateway Interface
+# FastAPI Application & Hashing Context
+# ---------------------------------------------------------
+app = FastAPI(
+    title="Automated-Multi-Agentic-Trading-System Dashboard Server",
+    description="FastAPI Web Interface Wrapper with Pydantic Auth layers and autonomous trading loops"
+)
+
+# Enable CORS for frontend flexibility
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
+# Mount separate custom CSS & JS static folder (MODULAR SERVING)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Password hashing configuration (Native Modern Bcrypt Implementation)
+def hash_password(password: str) -> str:
+    pwd_bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(pwd_bytes, salt).decode('utf-8')
+    
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    try:
+        return bcrypt.checkpw(
+            plain_password.encode('utf-8'),
+            hashed_password.encode('utf-8')
+        )
+    except Exception:
+        return False
+
+# Helper to verify DB connection
+def get_db_engine():
+    connection_url = os.getenv("neon_db")
+    if connection_url:
+        if connection_url.startswith("postgresql://"):
+            connection_url = connection_url.replace("postgresql://", "postgresql+psycopg://", 1)
+        return create_async_engine(connection_url, echo=False)
+    raise ValueError("Missing database connection URL (neon_db) in environment.")
+
+# Database Migrations on Startup
+@app.on_event("startup")
+async def startup_event():
+    try:
+        engine = get_db_engine()
+        async with engine.begin() as conn:
+            # Dynamically rename column if it exists to preserve data and fix relation discrepancy
+            try:
+                await conn.execute(text("ALTER TABLE system_users RENAME COLUMN mobile_number TO verified_phone;"))
+                print("🚀 [Database Migration] Successfully renamed column mobile_number to verified_phone in system_users table.")
+            except Exception:
+                # Column might already be renamed, or table does not exist yet (create_all will handle it)
+                pass
+            await conn.run_sync(Base.metadata.create_all)
+        await engine.dispose()
+        print("🚀 [FastAPI Startup] Relational schemas successfully verified and updated on Neon PostgreSQL.")
+    except Exception as err:
+        print(f"⚠️ [FastAPI Startup Warning] Automated schema verification failed: {err}")
+
+# ---------------------------------------------------------
+# Authentication & Historical Registry API Routes
+# ---------------------------------------------------------
+@app.post("/api/signup")
+async def api_signup(user: UserSignup):
+    try:
+        engine = get_db_engine()
+        async_session = async_sessionmaker(engine, expire_on_commit=False)
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=f"Database connection setup failed: {err}")
+        
+    try:
+        async with async_session() as db_session:
+            from sqlalchemy import select
+            stmt = select(SystemUser).where(SystemUser.email == user.email)
+            result = await db_session.execute(stmt)
+            existing = result.scalars().first()
+            
+            if existing:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Account registration conflict. Email already registered. Please proceed to Login."
+                )
+                
+            hashed_pwd = hash_password(user.password)
+            new_user = SystemUser(
+                full_name=user.full_name,
+                email=user.email,
+                verified_phone=user.mobile_number,
+                hashed_password=hashed_pwd
+            )
+            db_session.add(new_user)
+            await db_session.commit()
+            return {"status": "success", "message": "Operator registered successfully. Please proceed to login."}
+    finally:
+        await engine.dispose()
+
+@app.post("/api/login")
+async def api_login(user: UserLogin):
+    try:
+        engine = get_db_engine()
+        async_session = async_sessionmaker(engine, expire_on_commit=False)
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=f"Database connection setup failed: {err}")
+        
+    try:
+        async with async_session() as db_session:
+            from sqlalchemy import select
+            stmt = select(SystemUser).where(SystemUser.email == user.email)
+            result = await db_session.execute(stmt)
+            db_user = result.scalars().first()
+            
+            if not db_user or not verify_password(user.password, db_user.hashed_password):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid operational credentials. Access Denied."
+                )
+                
+            return {
+                "status": "success",
+                "operator": {
+                    "full_name": db_user.full_name,
+                    "email": db_user.email,
+                    "mobile_number": db_user.verified_phone
+                }
+            }
+    finally:
+        await engine.dispose()
+
+@app.get("/api/price-chart")
+async def api_get_price_chart(ticker: str, period: str = "7d", interval: str = "15m"):
+    clean_ticker = ticker.upper().strip()
+    try:
+        import yfinance as yf
+        stock = yf.Ticker(clean_ticker)
+        loop = asyncio.get_event_loop()
+        df = await loop.run_in_executor(None, lambda: stock.history(period=period, interval=interval))
+        
+        if df.empty:
+            raise HTTPException(status_code=400, detail=f"No data found for ticker '{clean_ticker}'")
+            
+        latest_close = float(df['Close'].iloc[-1])
+        open_price = float(df['Open'].iloc[-1])
+        high_price = float(df['High'].iloc[-1])
+        low_price = float(df['Low'].iloc[-1])
+        volume = int(df['Volume'].iloc[-1])
+        
+        candles = []
+        df_last = df.tail(24)
+        for timestamp, row in df_last.iterrows():
+            candles.append({
+                "time": timestamp.strftime("%Y-%m-%d %H:%M:%S") if hasattr(timestamp, "strftime") else str(timestamp),
+                "open": round(float(row['Open']), 2),
+                "high": round(float(row['High']), 2),
+                "low": round(float(row['Low']), 2),
+                "close": round(float(row['Close']), 2),
+                "volume": int(row['Volume'])
+            })
+            
+        start_price = float(df['Close'].iloc[0])
+        pct_change = ((latest_close - start_price) / start_price) * 100
+        
+        return {
+            "status": "success",
+            "ticker": clean_ticker,
+            "current_price": round(latest_close, 2),
+            "open": round(open_price, 2),
+            "high": round(high_price, 2),
+            "low": round(low_price, 2),
+            "volume": volume,
+            "price_change_pct": round(pct_change, 2),
+            "candles": candles
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch market data: {str(e)}")
+
+@app.get("/api/history")
+async def api_get_history():
+    try:
+        engine = get_db_engine()
+        async_session = async_sessionmaker(engine, expire_on_commit=False)
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=f"Database connection setup failed: {err}")
+        
+    try:
+        async with async_session() as db_session:
+            from sqlalchemy import select
+            stmt = select(TradingHistory).order_by(TradingHistory.timestamp.desc()).limit(15)
+            result = await db_session.execute(stmt)
+            records = result.scalars().all()
+            return [
+                {
+                    "id": r.id,
+                    "timestamp": r.timestamp.isoformat() if r.timestamp else "",
+                    "user_name": r.user_name,
+                    "ticker": r.ticker,
+                    "action": r.action,
+                    "risk_status": r.risk_status,
+                    "stable_capital": r.stable_capital,
+                    "budget_allocation": r.budget_allocation,
+                    "take_profit": r.take_profit,
+                    "stop_loss": r.stop_loss,
+                    "justification": r.justification
+                } for r in records
+            ]
+    finally:
+        await engine.dispose()
+
+@app.post("/api/trade")
+async def api_execute_trade(request: Request):
+    payload = await request.json()
+    ticker = payload.get("ticker")
+    interval = payload.get("interval")
+    period = payload.get("period")
+    strategy = payload.get("strategy")
+    user_name = payload.get("user_name")
+    user_email = payload.get("user_email")
+    user_phone = payload.get("user_phone")
+    
+    if not all([ticker, interval, period, strategy, user_name, user_email, user_phone]):
+        raise HTTPException(status_code=400, detail="Missing required parameters for operational execution.")
+        
+    try:
+        decision = await run_trading_desk(
+            ticker_input=ticker,
+            interval=interval,
+            period=period,
+            strategy=strategy,
+            user_name=user_name,
+            user_email=user_email,
+            user_phone=user_phone
+        )
+        if not decision:
+            raise HTTPException(status_code=500, detail="Multi-agent quantitative execution pipeline failed.")
+        return decision.dict()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ---------------------------------------------------------
+# Premium UI Portal Dynamic HTML Loader
+# ---------------------------------------------------------
+@app.get("/", response_class=HTMLResponse)
+async def serve_dashboard():
+    with open("index.html", "r", encoding="utf-8") as f:
+        html_content = f.read()
+    return HTMLResponse(content=html_content)
+
+# ---------------------------------------------------------
+# Interactive Gateway Interface (FastAPI Web Hosting Boot)
 # ---------------------------------------------------------
 if __name__ == "__main__":
-    # Mock the frontend login identity collection gateway at initial boot
-    print("\n" + "="*75)
-    print("      OPERATOR LOGIN IDENTITY MIGRATION GATEWAY (MOCK FRONTEND)")
-    print("="*75)
-    user_name_input = ""
-    while not user_name_input:
-        user_name_input = input("[Login] Enter Operator Name: ").strip()
-        if not user_name_input:
-            print("[Warning] Operator Name is required.")
-            
-    user_email_input = ""
-    while not user_email_input:
-        user_email_input = input("[Login] Enter Email Address: ").strip()
-        if not user_email_input:
-            print("[Warning] Email Address is required.")
-            
-    user_phone_input = ""
-    while not user_phone_input:
-        user_phone_input = input("[Login] Enter Phone Number: ").strip()
-        if not user_phone_input:
-            print("[Warning] Phone Number is required.")
-    print("-"*75)
-    print("Operator credentials logged successfully. Access granted.")
-    print("="*75)
-
-    # Quantitative Desk Router Greeting
+    import uvicorn
+    
     print("\n" + "="*75)
     print("      AUTOMATED MULTI-AGENTIC QUANTITATIVE TRADING DESK GATEWAY")
     print("="*75)
-    print("Welcome, Operator. This is your Master Trading Desk Router.")
-    print("System status: ACTIVE | Core Framework: OpenAI Agents SDK | LLM: Gemini")
-    print("-"*75)
+    print("Booting Asynchronous FastAPI Web Server & Neon PostgreSQL schemas monitor...")
+    print("Access the Premium UI Dashboard at: http://127.0.0.1:8000")
+    print("="*75 + "\n")
     
-    # 1. GREET AND ASK FOR ASSET (With crypto check guardrail)
-    while True:
-        ticker = input("[Router] Enter Asset Ticker (e.g. AAPL, NVDA, BTC-USD): ").strip()
-        if not ticker:
-            print("[Warning] Asset ticker cannot be empty. Please enter a valid symbol.")
-            continue
-            
-        # Crypto check guardrail
-        crypto_keywords = ['BTC', 'ETH', 'SOL', 'XRP', 'ADA', 'DOT', 'DOGE', 'LTC', 'LINK', 'UNI', 'AVAX']
-        clean_ticker = ticker.upper()
-        
-        # If user types BTC or similar without -USD
-        if clean_ticker in crypto_keywords:
-            print(f"\n[Polite Correction] Cryptocurrency assets must be explicitly mapped with their base currency pair.")
-            print(f"To ensure yfinance compatibility, please use '{clean_ticker}-USD' instead of '{ticker}'.")
-            print("-"*75)
-            continue
-            
-        ticker = clean_ticker
-        break
-        
-    # 2. PRESENT TIMEFRAME OPTIONS
-    print("\n" + "="*55)
-    print("            DYNAMIC STRATEGY TIMEFRAME SELECTOR")
-    print("="*55)
-    print("  INTRADAY STRATEGIES:")
-    print("    [A] 15-Minute (Short-term scalp       | Fetches 7 Days of history)")
-    print("    [B] 1-Hour    (Day/Swing execution    | Fetches 30 Days of history)")
-    print("  SWING STRATEGIES:")
-    print("    [C] 4-Hour    (Medium-term swing      | Fetches 60 Days of history)")
-    print("    [D] 1-Day     (Macro trend position   | Fetches 180 Days of history)")
-    print("="*55)
-    
-    while True:
-        choice = input("[Router] Select Execution Strategy Option [A, B, C, or D]: ").strip().upper()
-        if choice not in ['A', 'B', 'C', 'D']:
-            print("[Warning] Invalid selection. Please choose exactly A, B, C, or D.")
-            continue
-        break
-        
-    # 3. COMPUTE LOOKBACK DATA MATRIX SILENTLY
-    if choice == 'A':
-        interval = "15m"
-        period = "7d"
-        strategy = "Intraday Scalp"
-        primary_indicators = ["9-EMA", "21-EMA", "RSI(14)"]
-    elif choice == 'B':
-        interval = "1h"
-        period = "30d"
-        strategy = "Intraday Swing"
-        primary_indicators = ["9-EMA", "21-EMA", "RSI(14)"]
-    elif choice == 'C':
-        interval = "4h"
-        period = "60d"
-        strategy = "Medium Swing"
-        primary_indicators = ["50-MA", "MACD", "RSI(14)"]
-    else: # choice == 'D'
-        interval = "1d"
-        period = "180d"
-        strategy = "Macro Position"
-        primary_indicators = ["50-MA", "200-MA", "Macro RSI"]
-        
-    print("\n" + "-"*75)
-    print(f"[Router] Payload Locked & Compiled Successfully.")
-    print(f"  * TARGET ASSET     : {ticker}")
-    print(f"  * STRATEGY TYPE    : {strategy}")
-    print(f"  * CANDLE INTERVAL  : {interval}")
-    print(f"  * LOOKBACK WINDOW  : {period}")
-    print(f"  * INDICATOR SUITE  : {', '.join(primary_indicators)}")
-    print("-"*75)
-    print("[Router] Executing multi-agent validation pipeline. Please stand by...")
-    print("="*75)
-    
-    # Run the trading desk pipeline passing operator metadata down the chain
-    asyncio.run(run_trading_desk(ticker, interval, period, strategy, user_name_input, user_email_input, user_phone_input))
+    # Run the uvicorn web server instance cleanly
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False, log_level="info")
