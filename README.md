@@ -152,6 +152,15 @@ python .agents/brain/8169d2e7-195f-482a-bf14-b5bf777313c9/scratch/validate_syste
 
 ---
 
+---
+
+## 👥 Authors & Contributors
+
+* **Abdul Qadeer Khan**
+* **Ahmad Abdullah**
+
+---
+
 ## 🛡️ License
 
 This project is licensed under the Apache 2.0 License - see the [LICENSE](file:///mnt/FA68E41D68E3D683/Agentic%20_AI/Automated-Multi-Agentic-Trading-System/LICENSE) file for details.
