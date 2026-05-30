@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "trading-analysis": {
+      "source": "lucemia/trading-agents-plugin",
+      "sourceType": "github",
+      "skillPath": "skills/trading-analysis/SKILL.md",
+      "computedHash": "bad05ec07735dac85ede9f7dde79740b47e180e87dfc04c235442b4ca8613288"
+    }
+  }
+}
