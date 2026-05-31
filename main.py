@@ -356,15 +356,23 @@ def get_db_engine():
 async def startup_event():
     try:
         engine = get_db_engine()
+        
+        # 1. Run RENAME inside a separate, independent transaction block
+        async with engine.connect() as conn:
+            async with conn.begin() as transaction:
+                try:
+                    await conn.execute(text("ALTER TABLE system_users RENAME COLUMN mobile_number TO verified_phone;"))
+                    await transaction.commit()
+                    print("🚀 [Database Migration] Successfully renamed column mobile_number to verified_phone in system_users table.")
+                except Exception:
+                    await transaction.rollback()
+                    # Column might already be renamed, or table does not exist yet
+                    pass
+        
+        # 2. Run metadata creation in a clean, separate transaction block
         async with engine.begin() as conn:
-            # Dynamically rename column if it exists to preserve data and fix relation discrepancy
-            try:
-                await conn.execute(text("ALTER TABLE system_users RENAME COLUMN mobile_number TO verified_phone;"))
-                print("🚀 [Database Migration] Successfully renamed column mobile_number to verified_phone in system_users table.")
-            except Exception:
-                # Column might already be renamed, or table does not exist yet (create_all will handle it)
-                pass
             await conn.run_sync(Base.metadata.create_all)
+            
         await engine.dispose()
         print("🚀 [FastAPI Startup] Relational schemas successfully verified and updated on Neon PostgreSQL.")
     except Exception as err:
