@@ -83,6 +83,7 @@ class TradingHistory(Base):
     risk_status = Column(String)
     stable_capital = Column(String)
     budget_allocation = Column(String)
+    entry_price = Column(String)
     take_profit = Column(String)
     stop_loss = Column(String)
     justification = Column(Text)
@@ -185,7 +186,7 @@ manager_agent = Agent(
         "   - STRONG SELL: Severe downward breakdown, EMA9 well below EMA21, massive structural panic.\n"
         "4. Call `evaluate_trading_risk` tool with your chosen strategy signal tier (e.g., 'STRONG BUY') and the analyst summary to audit it.\n"
         "5. If the Risk Manager Agent rejects your proposal (verdict is 'REJECTED'), you must override your decision to 'HOLD'.\n"
-        "6. CALCULATE ADJUSTED TARGET EXIT BOUNDARIES (TP/SL): You are strictly forbidden from guessing, assuming, or utilizing hypothetical placeholder numbers for the asset entry cost. Look directly inside the `current_price` property field returned by the `analyze_market_data` tool handoff payload. Use that exact live decimal float value as your entry price variable baseline to execute your arithmetic calculations for Stop Loss and Take Profit bounds according to the strategy matrix rules (15m: -1%/+2% | 1h: -2.5%/+5% | 4h: -4%/+8% | 1d: -8%/+15%). Both values must be calculated as plain numerical float numbers rounded to 2 decimal places. If the final action is HOLD, SELL, or STRONG SELL, set both TAKE_PROFIT and STOP_LOSS to 0.0.\n"
+        "6. CALCULATE ADJUSTED TARGET EXIT BOUNDARIES (TP/SL): You are strictly forbidden from guessing, assuming, or utilizing hypothetical placeholder numbers for the asset entry cost. Look directly inside the `current_price` property field returned by the `analyze_market_data` tool handoff payload. Use that exact live decimal float value as your ENTRY_PRICE variable baseline. You MUST always calculate and return the exact Stop Loss and Take Profit bounds for ALL action signal tiers (including STRONG BUY, BUY, HOLD, SELL, STRONG SELL) according to the strategy matrix rules (15m: -1%/+2% | 1h: -2.5%/+5% | 4h: -4%/+8% | 1d: -8%/+15%). Both values must be calculated as plain numerical float numbers rounded to 2 decimal places. Under all circumstances, ENTRY_PRICE must match the exact live decimal float value of the asset, and TAKE_PROFIT and STOP_LOSS must be calculated and returned based on this baseline. You are strictly forbidden from setting ENTRY_PRICE, TAKE_PROFIT, or STOP_LOSS to 0.0 under any circumstances, even if the final action is HOLD, SELL, STRONG SELL, or if the Risk Manager rejects the proposal. You MUST always populate them with their non-zero positive calculated values for user visual reference.\n"
         "7. Provide the final formatted package decision. It MUST be a single raw JSON block (no markdown, no backticks) conforming to this schema:\n"
         "{\n"
         "  \"ticker\": \"TICKER_SYMBOL\",\n"
@@ -193,8 +194,9 @@ manager_agent = Agent(
         "  \"risk_status\": \"Risk Manager verdict (APPROVED or REJECTED)\",\n"
         "  \"stable_capital\": \"Available stable capital balance from Risk Manager (e.g. $10,000.00 USDT)\",\n"
         "  \"budget_allocation\": \"Exact capital allocation budget from Risk Manager (e.g. Allocate 5% ($500.00 USDT))\",\n"
-        "  \"TAKE_PROFIT\": float (calculated numerical Take Profit price target, or 0.0 if not applicable),\n"
-        "  \"STOP_LOSS\": float (calculated numerical Stop Loss price target, or 0.0 if not applicable),\n"
+        "  \"ENTRY_PRICE\": float (the exact baseline current_price extracted from the analyze_market_data tool payload used for risk target math calculations),\n"
+        "  \"TAKE_PROFIT\": float (calculated numerical Take Profit price target, must be non-zero positive float calculated based on the ENTRY_PRICE baseline),\n"
+        "  \"STOP_LOSS\": float (calculated numerical Stop Loss price target, must be non-zero positive float calculated based on the ENTRY_PRICE baseline),\n"
         "  \"justification\": \"Final combined reasoning explaining technical momentum, risk compliance, position allocation, and TP/SL target boundaries.\"\n"
         "}"
     ),
@@ -263,6 +265,7 @@ async def run_trading_desk(ticker_input: str, interval: str, period: str, strate
         print(f"  * RISK COMPLIANCE  : {decision.risk_status}")
         print(f"  * STABLE CAPITAL   : {decision.stable_capital}")
         print(f"  * BUDGET ALLOCATION: {decision.budget_allocation}")
+        print(f"  * POSITION ENTRY   : ${decision.ENTRY_PRICE:.2f}" if decision.ENTRY_PRICE > 0 else f"  * POSITION ENTRY   : N/A")
         print(f"  * TAKE PROFIT TRGT : ${decision.TAKE_PROFIT:.2f}" if decision.TAKE_PROFIT > 0 else f"  * TAKE PROFIT TRGT : N/A")
         print(f"  * STOP LOSS TARGET : ${decision.STOP_LOSS:.2f}" if decision.STOP_LOSS > 0 else f"  * STOP LOSS TARGET : N/A")
         print(f"  * JUSTIFICATION    : {decision.justification}")
@@ -281,6 +284,7 @@ async def run_trading_desk(ticker_input: str, interval: str, period: str, strate
                     risk_status=decision.risk_status,
                     stable_capital=decision.stable_capital,
                     budget_allocation=decision.budget_allocation,
+                    entry_price=str(decision.ENTRY_PRICE),
                     take_profit=str(decision.TAKE_PROFIT),
                     stop_loss=str(decision.STOP_LOSS),
                     justification=decision.justification
@@ -357,7 +361,7 @@ async def startup_event():
     try:
         engine = get_db_engine()
         
-        # 1. Run RENAME inside a separate, independent transaction block
+        # 1. Run RENAME and ADD COLUMN inside separate, independent transaction blocks
         async with engine.connect() as conn:
             async with conn.begin() as transaction:
                 try:
@@ -367,6 +371,15 @@ async def startup_event():
                 except Exception:
                     await transaction.rollback()
                     # Column might already be renamed, or table does not exist yet
+                    pass
+            
+            async with conn.begin() as transaction:
+                try:
+                    await conn.execute(text("ALTER TABLE trading_history ADD COLUMN IF NOT EXISTS entry_price VARCHAR;"))
+                    await transaction.commit()
+                    print("🚀 [Database Migration] Successfully verified/added entry_price column to trading_history table.")
+                except Exception:
+                    await transaction.rollback()
                     pass
         
         # 2. Run metadata creation in a clean, separate transaction block
@@ -518,6 +531,7 @@ async def api_get_history():
                     "risk_status": r.risk_status,
                     "stable_capital": r.stable_capital,
                     "budget_allocation": r.budget_allocation,
+                    "entry_price": r.entry_price,
                     "take_profit": r.take_profit,
                     "stop_loss": r.stop_loss,
                     "justification": r.justification

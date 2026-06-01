@@ -250,7 +250,7 @@ async function fetchAuditHistory() {
         const records = await response.json();
         
         if (records.length === 0) {
-            body.innerHTML = `<tr><td colspan="9" class="py-4 text-center text-slate-500">No audits found in registry database. Run a quantitative cycle to populate audits.</td></tr>`;
+            body.innerHTML = `<tr><td colspan="10" class="py-4 text-center text-slate-500">No audits found in registry database. Run a quantitative cycle to populate audits.</td></tr>`;
             return;
         }
         
@@ -267,6 +267,7 @@ async function fetchAuditHistory() {
                     <td class="py-3 ${riskColor}">${r.risk_status}</td>
                     <td class="py-3 text-slate-300">${r.stable_capital}</td>
                     <td class="py-3 text-cyber-amber">${r.budget_allocation}</td>
+                    <td class="py-3 text-cyber-cyan font-medium">${r.entry_price && r.entry_price !== '0.0' ? '$' + parseFloat(r.entry_price).toFixed(2) : 'N/A'}</td>
                     <td class="py-3 text-cyber-success font-medium">${r.take_profit !== '0.0' ? '$' + parseFloat(r.take_profit).toFixed(2) : 'N/A'}</td>
                     <td class="py-3 text-cyber-crimson font-medium">${r.stop_loss !== '0.0' ? '$' + parseFloat(r.stop_loss).toFixed(2) : 'N/A'}</td>
                 </tr>
@@ -274,7 +275,7 @@ async function fetchAuditHistory() {
         }).join('');
         
     } catch (err) {
-        body.innerHTML = `<tr><td colspan="9" class="py-4 text-center text-cyber-crimson">Failed to load system run audits from Neon PostgreSQL.</td></tr>`;
+        body.innerHTML = `<tr><td colspan="10" class="py-4 text-center text-cyber-crimson">Failed to load system run audits from Neon PostgreSQL.</td></tr>`;
     }
 }
 
@@ -424,6 +425,7 @@ async function executeTradingDesk() {
     
     // Dynamic loading indicators
     document.getElementById("indicator-allocation").innerText = "AUDITING...";
+    document.getElementById("indicator-entry").innerText = "CALCULATING...";
     document.getElementById("indicator-tp").innerText = "CALCULATING...";
     document.getElementById("indicator-sl").innerText = "CALCULATING...";
     
@@ -464,6 +466,7 @@ async function executeTradingDesk() {
             consoleBox.innerHTML += `Strategy Action  : ${data.action}\n`;
             consoleBox.innerHTML += `Risk Verdict : ${data.risk_status}\n`;
             consoleBox.innerHTML += `Budget Allocation: ${data.budget_allocation}\n`;
+            consoleBox.innerHTML += `Position Entry   : ${data.ENTRY_PRICE !== 0 ? '$' + data.ENTRY_PRICE.toFixed(2) : 'N/A'}\n`;
             consoleBox.innerHTML += `Take Profit Target: ${data.TAKE_PROFIT !== 0 ? '$' + data.TAKE_PROFIT : 'N/A'}\n`;
             consoleBox.innerHTML += `Stop Loss Target  : ${data.STOP_LOSS !== 0 ? '$' + data.STOP_LOSS : 'N/A'}\n`;
             consoleBox.innerHTML += `Justification    : ${data.justification}\n`;
@@ -471,6 +474,7 @@ async function executeTradingDesk() {
         
         // Update main dashboard metrics
         document.getElementById("indicator-allocation").innerText = data.budget_allocation;
+        document.getElementById("indicator-entry").innerText = data.ENTRY_PRICE !== 0 ? `$${data.ENTRY_PRICE.toFixed(2)}` : 'N/A';
         document.getElementById("indicator-tp").innerText = data.TAKE_PROFIT !== 0 ? `$${data.TAKE_PROFIT.toFixed(2)}` : 'N/A';
         document.getElementById("indicator-sl").innerText = data.STOP_LOSS !== 0 ? `$${data.STOP_LOSS.toFixed(2)}` : 'N/A';
         
@@ -528,6 +532,7 @@ async function executeTradingDesk() {
             consoleBox.innerHTML += `\n[Error] Pipeline crashed: ${err.message}\n`;
         }
         document.getElementById("indicator-allocation").innerText = "ERROR";
+        document.getElementById("indicator-entry").innerText = "ERROR";
         document.getElementById("indicator-tp").innerText = "ERROR";
         document.getElementById("indicator-sl").innerText = "ERROR";
         if (signalBadge) {

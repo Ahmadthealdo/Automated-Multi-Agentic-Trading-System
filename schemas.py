@@ -23,8 +23,9 @@ class FinalTradingDecision(BaseModel):
     risk_status: str
     stable_capital: str = Field(description="Available stable capital balance.")
     budget_allocation: str = Field(description="Exact capital allocation budget.")
-    TAKE_PROFIT: float = Field(description="Calculated target Take Profit price as a float, or 0.0 if not applicable.")
-    STOP_LOSS: float = Field(description="Calculated target Stop Loss price as a float, or 0.0 if not applicable.")
+    ENTRY_PRICE: float = Field(default=0.0, description="The absolute latest actual closing price of the asset used as the definitive entry level baseline for target math calculations")
+    TAKE_PROFIT: float = Field(default=0.0, description="Calculated target Take Profit price as a float, or 0.0 if not applicable.")
+    STOP_LOSS: float = Field(default=0.0, description="Calculated target Stop Loss price as a float, or 0.0 if not applicable.")
     justification: str = Field(description="Comprehensive final combined reasoning explanation.")
 
 # ---------------------------------------------------------
