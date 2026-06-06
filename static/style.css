@@ -1,240 +1,148 @@
 /* ==========================================================================
-   Premium Industrial-Utilitarian Terminal Theme Style Sheet
+   LeetCode-Style Minimalist UI Theme Style Sheet
    ========================================================================== */
 
-/* Typography Scale Pairings (Banned: Inter, Roboto, Arial, Space Grotesk) */
+:root {
+    --bg-color: #1A1A1A;
+    --panel-color: #232323;
+    --border-color: #3F3F3F;
+    --accent-color: #3DD9F7;
+    --success-color: #29B86F;
+    --warning-color: #FF7A45;
+    --danger-color: #EF4743;
+    --text-color: #E4E6EB;
+    --text-secondary: #A0A4A8;
+}
+
 body {
-    font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
-    background: radial-gradient(circle at top, #1A2333 0%, #0B0F17 100%) !important;
-    color: #F1F5F9;
+    font-family: 'Inter', -apple-system, sans-serif;
+    background-color: var(--bg-color) !important;
+    color: var(--text-color);
     overflow-x: hidden;
-    letter-spacing: -0.01em;
+    margin: 0;
+    padding: 0;
 }
 
-.font-sans {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-}
-
-.font-mono {
-    font-family: 'JetBrains Mono', monospace;
-}
-
-/* Purged grids and scanlines */
-.grid-bg, .crt-scanlines {
-    display: none !important;
-}
-
-/* Glassmorphism financial panels */
-.glass-panel {
-    background: rgba(19, 28, 46, 0.75);
-    border: 1px solid rgba(56, 189, 248, 0.12);
-    box-shadow: 0 10px 30px -10px rgba(3, 7, 18, 0.5);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.glass-panel-glow {
-    border-color: rgba(56, 189, 248, 0.3);
-    box-shadow: 0 12px 40px -10px rgba(3, 7, 18, 0.6), 0 0 25px rgba(56, 189, 248, 0.05);
-}
-
-/* Marquee scrolling ticker tape */
-@keyframes marquee {
-    0% { transform: translateX(0%); }
-    100% { transform: translateX(-50%); }
-}
-
-.ticker-marquee {
-    display: flex;
-    width: max-content;
-    animation: marquee 35s linear infinite;
-}
-
-.ticker-marquee:hover {
-    animation-play-state: paused;
-}
-
-/* logon screen 3D card layout parameter options */
-.perspective-1000 {
-    perspective: 1000px;
-}
-
-.flip-card-inner {
-    transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-    transform-style: preserve-3d;
-}
-
-.flip-card-flipped {
-    transform: rotateY(180deg);
-}
-
-.flip-card-front, .flip-card-back {
-    backface-visibility: hidden;
-    position: absolute;
-    width: 100%;
-    height: 100%;
-}
-
-.flip-card-back {
-    transform: rotateY(180deg);
-}
-
-/* Custom Sliding Toggle Selector Styles */
-.auth-toggle-slider {
-    position: absolute;
-    top: 4px;
-    bottom: 4px;
-    left: 4px;
-    width: calc(50% - 4px);
-    background-color: #38BDF8;
-    border-radius: 6px;
-    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-    z-index: 0;
-    box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
-}
-
-/* Input Styles and Focus Glow Ring overrides */
-input {
-    background-color: rgba(11, 15, 23, 0.8) !important;
-    border: 1px solid rgba(56, 189, 248, 0.15) !important;
-    color: #FFF !important;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-
-input:focus {
-    border-color: #38BDF8 !important;
-    box-shadow: 0 0 15px rgba(56, 189, 248, 0.35) !important;
-    background-color: #030712 !important;
-    transform: translateY(-1px);
-}
-
-/* Form Shaking Animation for Validation Failures */
-@keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    15%, 45%, 75% { transform: translateX(-6px); }
-    30%, 60%, 90% { transform: translateX(6px); }
-}
-
-.shake-feedback {
-    animation: shake 0.4s ease-in-out;
-}
-
-/* Micro-interaction Button Overrides */
-button {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-
-button:hover:not(:disabled) {
-    transform: translateY(-1px);
-    filter: brightness(1.1);
-}
-
-button:active:not(:disabled) {
-    transform: translateY(1px);
-}
-
-/* Strategy Button Selection Clean Contrast Styling */
-.strategy-btn {
-    background-color: rgba(11, 15, 23, 0.5) !important;
-    border: 1px solid rgba(56, 189, 248, 0.15) !important;
-    color: #94A3B8 !important;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-
-.strategy-btn:hover {
-    border-color: rgba(56, 189, 248, 0.5) !important;
-    background-color: rgba(56, 189, 248, 0.04) !important;
-    color: #FFF !important;
-}
-
-.strategy-btn.active {
-    border-color: #38BDF8 !important;
-    background-color: rgba(56, 189, 248, 0.15) !important;
-    color: #38BDF8 !important;
-    box-shadow: 0 0 15px rgba(56, 189, 248, 0.2) !important;
-    font-weight: 600 !important;
-}
-
-/* Asset Quick-Select Badges Style Rules */
-.asset-badge {
-    background-color: rgba(19, 28, 46, 0.6);
-    border: 1px solid rgba(56, 189, 248, 0.1);
-    color: #94A3B8;
-    padding: 4px 10px;
-    border-radius: 4px;
-    font-size: 0.65rem;
-    font-family: 'JetBrains Mono', monospace;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.asset-badge:hover {
-    border-color: #38BDF8;
-    color: #FFF;
-    background-color: rgba(56, 189, 248, 0.08);
-}
-
-/* Financial Design Colors Override (Institutional Tailwind CSS System) */
-.text-cyber-cyan { color: #38BDF8 !important; }
-.bg-cyber-cyan { background-color: #38BDF8 !important; }
-.text-cyber-success { color: #10B981 !important; }
-.bg-cyber-success { background-color: #10B981 !important; }
-.text-cyber-crimson { color: #F97316 !important; }
-.bg-cyber-crimson { background-color: #F97316 !important; }
-.text-cyber-amber { color: #EAB308 !important; }
-.bg-cyber-amber { background-color: #EAB308 !important; }
-.border-cyber-amber { border-color: #EAB308 !important; }
-.border-cyber-border { border-color: rgba(56, 189, 248, 0.15) !important; }
-
-/* Visual glows */
-.glow-blue {
-    text-shadow: 0 0 8px rgba(56, 189, 248, 0.5);
-}
-
-.glow-success {
-    text-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
-}
-
-.glow-crimson {
-    text-shadow: 0 0 8px rgba(249, 115, 22, 0.4);
-}
-
-.text-glow-cyan {
-    text-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
-}
-
-.shadow-glow-cyan {
-    box-shadow: 0 0 15px rgba(56, 189, 248, 0.25);
-}
-
-.shadow-glow-blue {
-    box-shadow: 0 0 15px rgba(56, 189, 248, 0.25);
-}
-
-/* Scrollbar styles config */
+/* LeetCode custom scrollbar */
 ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-    background: #0B0F17;
+    background: var(--bg-color);
 }
 
 ::-webkit-scrollbar-thumb {
-    background: rgba(56, 189, 248, 0.15);
+    background: var(--border-color);
     border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #38BDF8;
+    background: var(--text-secondary);
 }
 
-/* Font Size Utility Scale */
-.text-xxs {
-    font-size: 0.72rem;
+/* Panel Containers */
+.leetcode-panel {
+    background-color: var(--panel-color);
+    border: 1px solid var(--border-color);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
-.text-xxxs {
-    font-size: 0.62rem;
+
+.leetcode-panel:hover {
+    border-color: #5F5F5F;
+}
+
+/* Auth Portal Toggle */
+.auth-toggle-slider {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 4px;
+    width: calc(50% - 4px);
+    background-color: var(--accent-color);
+    border-radius: 4px;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 0;
+}
+
+/* Custom inputs and buttons */
+input {
+    background-color: #2D2D2D !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-color) !important;
+    border-radius: 4px !important;
+    font-family: 'Inter', sans-serif !important;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+input:focus {
+    outline: none !important;
+    border-color: var(--accent-color) !important;
+    box-shadow: 0 0 0 2px rgba(61, 217, 247, 0.15) !important;
+}
+
+/* Strategy cards selector */
+.strategy-card {
+    background-color: #2D2D2D;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.strategy-card:hover {
+    border-color: var(--accent-color);
+    color: var(--text-color);
+}
+
+.strategy-card.active {
+    border-color: var(--accent-color);
+    background-color: rgba(61, 217, 247, 0.08);
+    color: var(--accent-color);
+    font-weight: 600;
+}
+
+/* Quick badges */
+.asset-badge {
+    background-color: #2D2D2D;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.asset-badge:hover {
+    border-color: var(--accent-color);
+    color: var(--text-color);
+    background-color: rgba(61, 217, 247, 0.05);
+}
+
+/* LeetCode Leaderboard Table Styles */
+table {
+    border-collapse: collapse;
+}
+
+th {
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+td {
+    border-bottom: 1px solid rgba(63, 63, 63, 0.4);
+}
+
+tr:hover td {
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+/* Animations */
+.transition-all-300 {
+    transition: all 0.3s ease;
 }
