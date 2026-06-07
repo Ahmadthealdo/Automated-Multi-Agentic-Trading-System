@@ -87,6 +87,7 @@ class TradingHistory(Base):
     take_profit = Column(String)
     stop_loss = Column(String)
     justification = Column(Text)
+    status = Column(String, default="RUNNING")
 
 class SystemUser(Base):
     __tablename__ = 'system_users'
@@ -225,6 +226,136 @@ manager_agent = Agent(
 )
 
 # ---------------------------------------------------------
+# Dynamic Trade Sizing & Outcome Auditing Logic
+# ---------------------------------------------------------
+async def audit_trade_status(record, db_session):
+    """
+    Checks the chart data (via yfinance) starting from the trade's creation timestamp
+    to determine whether it hit its entry, take profit, or stop loss.
+    Updates the record.status field and marks it as PROFIT, LOSS, or INACTIVE.
+    """
+    if record.status in ("PROFIT", "LOSS", "INACTIVE"):
+        return record.status
+
+    # If it was a HOLD or REJECTED trade, it never executed -> INACTIVE
+    if record.action == "HOLD" or record.risk_status == "REJECTED":
+        record.status = "INACTIVE"
+        db_session.add(record)
+        return "INACTIVE"
+
+    try:
+        entry = float(record.entry_price) if record.entry_price else 0.0
+        tp = float(record.take_profit) if record.take_profit else 0.0
+        sl = float(record.stop_loss) if record.stop_loss else 0.0
+    except (TypeError, ValueError):
+        record.status = "INACTIVE"
+        db_session.add(record)
+        return "INACTIVE"
+
+    if entry <= 0 or tp <= 0 or sl <= 0:
+        record.status = "INACTIVE"
+        db_session.add(record)
+        return "INACTIVE"
+
+    import yfinance as yf
+    import pandas as pd
+    from datetime import datetime, timezone, timedelta
+    
+    start_time = record.timestamp
+    if start_time.tzinfo is not None:
+        start_time = start_time.astimezone(timezone.utc).replace(tzinfo=None)
+        
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    
+    # If the trade is brand new (less than 15 seconds old), let it run
+    if (now - start_time).total_seconds() < 15:
+        record.status = "RUNNING"
+        db_session.add(record)
+        return "RUNNING"
+
+    age_seconds = (now - start_time).total_seconds()
+    if age_seconds < 86400:  # < 24 hours
+        interval = "1m"
+    elif age_seconds < 86400 * 7:  # < 7 days
+        interval = "5m"
+    elif age_seconds < 86400 * 30:  # < 30 days
+        interval = "15m"
+    else:
+        interval = "1h"
+        
+    try:
+        ticker = record.ticker.upper().strip()
+        stock = yf.Ticker(ticker)
+        
+        # Format strings for yfinance query bounds as YYYY-MM-DD
+        # yfinance is highly stable when querying full day ranges, and we slice the result locally
+        start_str = start_time.strftime("%Y-%m-%d")
+        end_str = (now + timedelta(days=1)).strftime("%Y-%m-%d")
+        
+        loop = asyncio.get_event_loop()
+        df = await loop.run_in_executor(
+            None, 
+            lambda: stock.history(start=start_str, end=end_str, interval=interval)
+        )
+        
+        if df.empty:
+            # Fallback to last 5d history
+            df = await loop.run_in_executor(
+                None,
+                lambda: stock.history(period="5d", interval=interval)
+            )
+            
+        if df.empty:
+            record.status = "RUNNING"
+            db_session.add(record)
+            return "RUNNING"
+            
+        # Standardize DataFrame time index to UTC for matching
+        if df.index.tz is not None:
+            df.index = df.index.tz_convert('UTC')
+        else:
+            df.index = df.index.tz_localize('UTC')
+            
+        # Slice DataFrame to only keep candles starting from the trade's exact creation timestamp
+        trade_time_utc = pd.to_datetime(start_time).tz_localize('UTC')
+        df = df[df.index >= trade_time_utc]
+            
+        is_buy = record.action in ("BUY", "STRONG BUY")
+        status = "RUNNING"
+        
+        for idx, row in df.iterrows():
+            low = float(row['Low'])
+            high = float(row['High'])
+            
+            if is_buy:
+                # Long position targets: hits Stop Loss first or Take Profit first
+                if low <= sl:
+                    status = "LOSS"
+                    break
+                elif high >= tp:
+                    status = "PROFIT"
+                    break
+            else:
+                # Short position targets: hits Stop Loss first or Take Profit first
+                if high >= sl:
+                    status = "LOSS"
+                    break
+                elif low <= tp:
+                    status = "PROFIT"
+                    break
+                    
+        record.status = status
+        db_session.add(record)
+        return status
+        
+    except Exception as e:
+        print(f"⚠️ [Audit Engine Warning] Failed to resolve status for record {record.id}: {e}")
+        if not record.status:
+            record.status = "RUNNING"
+            db_session.add(record)
+        return record.status
+
+# ---------------------------------------------------------
 # Execution Engine (Core Agent Runner Pipeline)
 # ---------------------------------------------------------
 async def run_trading_desk(ticker_input: str, interval: str, period: str, strategy: str, user_name: str, user_email: str, user_phone: str):
@@ -295,6 +426,10 @@ async def run_trading_desk(ticker_input: str, interval: str, period: str, strate
         try:
             async_session = async_sessionmaker(engine, expire_on_commit=False)
             async with async_session() as db_session:
+                status_init = "INACTIVE"
+                if decision.risk_status == "APPROVED" and decision.action in ("BUY", "STRONG BUY", "SELL", "STRONG SELL"):
+                    status_init = "RUNNING"
+
                 new_record = TradingHistory(
                     user_name=user_name,
                     user_email=user_email,
@@ -307,7 +442,8 @@ async def run_trading_desk(ticker_input: str, interval: str, period: str, strate
                     entry_price=str(decision.ENTRY_PRICE),
                     take_profit=str(decision.TAKE_PROFIT),
                     stop_loss=str(decision.STOP_LOSS),
-                    justification=decision.justification
+                    justification=decision.justification,
+                    status=status_init
                 )
                 db_session.add(new_record)
                 await db_session.commit()
@@ -398,6 +534,15 @@ async def startup_event():
                     await conn.execute(text("ALTER TABLE trading_history ADD COLUMN IF NOT EXISTS entry_price VARCHAR;"))
                     await transaction.commit()
                     print("🚀 [Database Migration] Successfully verified/added entry_price column to trading_history table.")
+                except Exception:
+                    await transaction.rollback()
+                    pass
+            
+            async with conn.begin() as transaction:
+                try:
+                    await conn.execute(text("ALTER TABLE trading_history ADD COLUMN IF NOT EXISTS status VARCHAR;"))
+                    await transaction.commit()
+                    print("🚀 [Database Migration] Successfully verified/added status column to trading_history table.")
                 except Exception:
                     await transaction.rollback()
                     pass
@@ -541,6 +686,13 @@ async def api_get_history():
             stmt = select(TradingHistory).order_by(TradingHistory.timestamp.desc()).limit(15)
             result = await db_session.execute(stmt)
             records = result.scalars().all()
+            
+            # Audit trade status dynamically for any running or unassigned records
+            for r in records:
+                await audit_trade_status(r, db_session)
+                
+            await db_session.commit()
+            
             return [
                 {
                     "id": r.id,
@@ -554,7 +706,8 @@ async def api_get_history():
                     "entry_price": r.entry_price,
                     "take_profit": r.take_profit,
                     "stop_loss": r.stop_loss,
-                    "justification": r.justification
+                    "justification": r.justification,
+                    "status": r.status or "RUNNING"
                 } for r in records
             ]
     finally:

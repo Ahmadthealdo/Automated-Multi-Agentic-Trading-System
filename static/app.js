@@ -928,18 +928,26 @@ function Dashboard({ operator, onSignOut }) {
                                 <th className="py-2 pb-3 font-semibold">Entry</th>
                                 <th className="py-2 pb-3 font-semibold">TP Target</th>
                                 <th className="py-2 pb-3 font-semibold">SL Target</th>
+                                <th className="py-2 pb-3 font-semibold">Status</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-[#3F3F3F] divide-opacity-30">
                             {audits.length === 0 ? (
                                 <tr>
-                                    <td colSpan="10" className="py-6 text-center text-[#A0A4A8] uppercase">
+                                    <td colSpan="11" className="py-6 text-center text-[#A0A4A8] uppercase">
                                         No audits registered. Run a quantitative cycle to populate Neon tables.
                                     </td>
                                 </tr>
                             ) : (
                                 audits.map(r => {
                                     const formattedDate = new Date(r.timestamp).toISOString().replace("T", " ").slice(0, 19);
+                                    
+                                    // Determine status pill colors dynamically
+                                    let statusColor = "text-[#A0A4A8]";
+                                    if (r.status === "PROFIT") statusColor = "text-[#29B86F] font-bold";
+                                    if (r.status === "LOSS") statusColor = "text-[#EF4743] font-bold";
+                                    if (r.status === "RUNNING") statusColor = "text-[#3DD9F7] font-semibold animate-pulse";
+                                    
                                     return (
                                         <tr key={r.id} className="hover:bg-white hover:bg-opacity-5 transition-colors">
                                             <td className="py-2.5 text-[#A0A4A8]">{formattedDate}</td>
@@ -961,6 +969,9 @@ function Dashboard({ operator, onSignOut }) {
                                             </td>
                                             <td className="py-2.5 text-[#EF4743]">
                                                 {r.stop_loss && r.stop_loss !== '0.0' && r.stop_loss !== '0' ? '$' + parseFloat(r.stop_loss).toFixed(2) : 'N/A'}
+                                            </td>
+                                            <td className={`py-2.5 uppercase text-[9px] ${statusColor}`}>
+                                                {r.status || "RUNNING"}
                                             </td>
                                         </tr>
                                     );
