@@ -131,11 +131,18 @@ function CandlestickChart({ candles, decision, ticker, strategyName }) {
                         </g>
                     )}
                 </svg>
-                
-                {/* Hold override info overlays */}
-                {decision && decision.ticker === ticker && decision.action === "HOLD" && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-65 text-[10px] font-mono text-[#A0A4A8] uppercase tracking-wider">
-                        Risk Manager Override - Neutral State (No Targets Plotted)
+                {/* Status Overlay Badge */}
+                {decision && decision.ticker === ticker && (
+                    <div className="absolute top-2 left-2 bg-[#1A1A1A] bg-opacity-80 px-2 py-1 rounded border border-[#3F3F3F] text-[9px] font-mono flex items-center gap-1.5 select-none">
+                        <span className="text-[#A0A4A8] uppercase">Signal:</span>
+                        <span className={decision.action.includes("BUY") ? "text-[#29B86F] font-bold" : decision.action.includes("SELL") ? "text-[#FF7A45] font-bold" : "text-white font-bold"}>
+                            {decision.action}
+                        </span>
+                        <span className="text-[#3F3F3F]">|</span>
+                        <span className="text-[#A0A4A8] uppercase">Risk:</span>
+                        <span className={decision.risk_status === "APPROVED" ? "text-[#29B86F] font-bold" : "text-[#EF4743] font-bold"}>
+                            {decision.risk_status}
+                        </span>
                     </div>
                 )}
             </div>

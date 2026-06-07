@@ -44,6 +44,54 @@ def fetch_market_data(ticker: str, period: str, interval: str) -> str:
         df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean().round(2)
         df['MACD_Hist'] = (df['MACD'] - df['MACD_Signal']).round(2)
         
+        # Calculate ATR (14) for volatility metrics
+        high_low = df['High'] - df['Low']
+        high_close = (df['High'] - df['Close'].shift()).abs()
+        low_close = (df['Low'] - df['Close'].shift()).abs()
+        ranges = pd.concat([high_low, high_close, low_close], axis=1)
+        true_range = ranges.max(axis=1)
+        df['ATR_14'] = true_range.ewm(span=14, adjust=False).mean().round(2)
+        
+        # Identify Support & Demand Zones (Swing Highs and Lows)
+        window_size = 5
+        if len(df) < 50:
+            window_size = 3
+        if len(df) < 20:
+            window_size = 2
+            
+        high_mask = pd.Series(True, index=df.index)
+        for i in range(-window_size, window_size + 1):
+            if i != 0:
+                high_mask &= (df['High'] >= df['High'].shift(i))
+                
+        low_mask = pd.Series(True, index=df.index)
+        for i in range(-window_size, window_size + 1):
+            if i != 0:
+                low_mask &= (df['Low'] <= df['Low'].shift(i))
+                
+        raw_highs = df[high_mask]['High'].dropna().tolist()
+        raw_lows = df[low_mask]['Low'].dropna().tolist()
+        
+        def consolidate_levels(levels, tolerance=0.005):
+            if not levels:
+                return []
+            sorted_levels = sorted(levels)
+            consolidated = [sorted_levels[0]]
+            for lvl in sorted_levels[1:]:
+                if (lvl - consolidated[-1]) / consolidated[-1] >= tolerance:
+                    consolidated.append(lvl)
+            return consolidated
+            
+        swing_highs = consolidate_levels(raw_highs)
+        swing_lows = consolidate_levels(raw_lows)
+        
+        current_price = float(df['Close'].iloc[-1])
+        supply_above = [sh for sh in swing_highs if sh > current_price]
+        demand_below = [sl for sl in swing_lows if sl < current_price]
+        
+        nearest_supply = min(supply_above) if supply_above else None
+        nearest_demand = max(demand_below) if demand_below else None
+        
         # Format a token-conserved return representation
         latest = df.iloc[-1]
         summary = []
@@ -62,6 +110,13 @@ def fetch_market_data(ticker: str, period: str, interval: str) -> str:
             summary.append(f"SMA(200): {latest['SMA_200']}")
             
         summary.append(f"MACD Line: {latest['MACD']} | Signal Line: {latest['MACD_Signal']} | Histogram: {latest['MACD_Hist']}")
+        summary.append(f"ATR (14): ${latest['ATR_14']:.2f}")
+        
+        summary.append("\n--- Identified Supply & Demand Zones ---")
+        summary.append(f"Nearest Supply Zone (Resistance): ${nearest_supply:.2f}" if nearest_supply else "Nearest Supply Zone (Resistance): None (Asset is at multi-period highs)")
+        summary.append(f"Nearest Demand Zone (Support): ${nearest_demand:.2f}" if nearest_demand else "Nearest Demand Zone (Support): None (Asset is at multi-period lows)")
+        summary.append(f"All Active Supply Zones (Highs): {', '.join([f'${x:.2f}' for x in sorted(supply_above)[:3]]) if supply_above else 'None'}")
+        summary.append(f"All Active Demand Zones (Lows): {', '.join([f'${x:.2f}' for x in sorted(demand_below, reverse=True)[:3]]) if demand_below else 'None'}")
         
         summary.append("\n--- Last 5 Pricing & Indicator Intervals ---")
         recent_df = df[['Open', 'High', 'Low', 'Close', 'Volume', 'RSI_14', 'EMA_9', 'EMA_21']].tail(5)
