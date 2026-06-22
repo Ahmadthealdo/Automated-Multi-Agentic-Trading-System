@@ -13,29 +13,31 @@
     
     <!-- Tailwind Theme Config Mapping to LeetCode Palette -->
     <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        mono: ['"JetBrains Mono"', 'monospace']
-                    },
-                    colors: {
-                        leetcode: {
-                            bg: '#1A1A1A',
-                            panel: '#232323',
-                            border: '#3F3F3F',
-                            accent: '#3DD9F7',
-                            success: '#29B86F',
-                            warning: '#FF7A45',
-                            danger: '#EF4743',
-                            text: '#E4E6EB',
-                            textSecondary: '#A0A4A8'
+        if (typeof tailwind !== 'undefined') {
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        fontFamily: {
+                            sans: ['Inter', 'sans-serif'],
+                            mono: ['"JetBrains Mono"', 'monospace']
+                        },
+                        colors: {
+                            leetcode: {
+                                bg: '#1A1A1A',
+                                panel: '#232323',
+                                border: '#3F3F3F',
+                                accent: '#3DD9F7',
+                                success: '#29B86F',
+                                warning: '#FF7A45',
+                                danger: '#EF4743',
+                                text: '#E4E6EB',
+                                textSecondary: '#A0A4A8'
+                            }
                         }
                     }
                 }
             }
-        }
+        };
     </script>
     
     <!-- Custom CSS Stylesheet for LeetCode Overrides -->
@@ -46,12 +48,12 @@
     <!-- Mounting Node for React App -->
     <div id="root"></div>
 
-    <!-- React 18 & ReactDOM 18 UMD Production CDNs -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- React 18 & ReactDOM 18 UMD Local Files -->
+    <script src="/static/react.production.min.js"></script>
+    <script src="/static/react-dom.production.min.js"></script>
     
-    <!-- Babel Standalone CDN for on-the-fly JSX Compilation in app.js -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Babel Standalone Local File for on-the-fly JSX Compilation in app.js -->
+    <script src="/static/babel.min.js"></script>
     
     <!-- React Main Application Logic -->
     <script type="text/babel" data-presets="react" src="/static/app.js?v=1.0.3"></script>

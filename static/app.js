@@ -109,7 +109,7 @@ function CandlestickChart({ candles, decision, ticker, strategyName }) {
                             {tpY >= 0 && tpY <= svgHeight && (
                                 <g>
                                     <line x1="0" y1={tpY} x2={svgWidth} y2={tpY} stroke="#29B86F" strokeWidth="1" strokeDasharray="4,4" />
-                                    <text x="5" y={tpY - 4} fill="#29B86F" className="text-[9px] font-mono">TP: ${decision.TAKE_PROFIT.toFixed(2)}</text>
+                                    <text x="5" y={tpY - 4} fill="#29B86F" className="text-[9px] font-mono">TP: ${decision.TAKE_PROFIT && !isNaN(decision.TAKE_PROFIT) ? parseFloat(decision.TAKE_PROFIT).toFixed(2) : '0.00'}</text>
                                 </g>
                             )}
 
@@ -117,7 +117,7 @@ function CandlestickChart({ candles, decision, ticker, strategyName }) {
                             {entryY >= 0 && entryY <= svgHeight && (
                                 <g>
                                     <line x1="0" y1={entryY} x2={svgWidth} y2={entryY} stroke="#3DD9F7" strokeWidth="1" strokeDasharray="4,4" />
-                                    <text x="5" y={entryY - 4} fill="#3DD9F7" className="text-[9px] font-mono">Entry: ${decision.ENTRY_PRICE.toFixed(2)}</text>
+                                    <text x="5" y={entryY - 4} fill="#3DD9F7" className="text-[9px] font-mono">Entry: ${decision.ENTRY_PRICE && !isNaN(decision.ENTRY_PRICE) ? parseFloat(decision.ENTRY_PRICE).toFixed(2) : '0.00'}</text>
                                 </g>
                             )}
 
@@ -125,7 +125,7 @@ function CandlestickChart({ candles, decision, ticker, strategyName }) {
                             {slY >= 0 && slY <= svgHeight && (
                                 <g>
                                     <line x1="0" y1={slY} x2={svgWidth} y2={slY} stroke="#EF4743" strokeWidth="1" strokeDasharray="4,4" />
-                                    <text x="5" y={slY - 4} fill="#EF4743" className="text-[9px] font-mono">SL: ${decision.STOP_LOSS.toFixed(2)}</text>
+                                    <text x="5" y={slY - 4} fill="#EF4743" className="text-[9px] font-mono">SL: ${decision.STOP_LOSS && !isNaN(decision.STOP_LOSS) ? parseFloat(decision.STOP_LOSS).toFixed(2) : '0.00'}</text>
                                 </g>
                             )}
                         </g>
@@ -868,7 +868,7 @@ function Dashboard({ operator, onSignOut }) {
                                         </div>
                                         <div className="flex justify-between items-center bg-[#1A1A1A] p-2 rounded border border-[#3F3F3F]">
                                             <span className="text-[#A0A4A8]">ENTRY PRICE:</span>
-                                            <span className="font-bold text-[#3DD9F7]">${decision.ENTRY_PRICE.toFixed(2)}</span>
+                                            <span className="font-bold text-[#3DD9F7]">${decision.ENTRY_PRICE && !isNaN(decision.ENTRY_PRICE) ? parseFloat(decision.ENTRY_PRICE).toFixed(2) : '0.00'}</span>
                                         </div>
                                     </div>
                                     
