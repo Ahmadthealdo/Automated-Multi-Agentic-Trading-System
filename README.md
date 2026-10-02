@@ -141,19 +141,29 @@ python .agents/brain/8169d2e7-195f-482a-bf14-b5bf777313c9/scratch/validate_syste
 
 ---
 
-## 📁 File Structure
+## 📁 System Architecture & Directory Structure
 
 ```
-├── .agents/                    # System Agent workspace instructions & skills
-├── static/
-│   ├── app.js                  # Scaled SVG candle drawer & client logic
-│   └── style.css               # Utilitarian Bloomberg layout styles
-├── templates/                  # Frontend views
-├── index.html                  # Core single-page operator dashboard
-├── main.py                     # FastAPI server routes & multi-agent execution pipeline
-├── schemas.py                  # Pydantic validation boundaries & schemas
-├── tools.py                    # yfinance quantitative extraction tools
-├── pyproject.toml              # UV dependency declarations
+Automated-Multi-Agentic-Trading-System/
+├── app/
+│   ├── core/                   # System config, security (bcrypt), & Langfuse telemetry
+│   ├── db/                     # Async SQLAlchemy session factory & startup migrations
+│   ├── models/                 # Declarative ORM models (SystemUser, TradingHistory)
+│   ├── schemas/                # Strict Pydantic contracts & inter-agent interfaces
+│   ├── agents/                 # Specialized Multi-Agent System (MAS) Engine
+│   │   ├── client.py           # Gemini 2.5 Flash / OpenAI Agents client
+│   │   ├── prompts/            # Versioned cognitive instructions (Analyst, Risk, Manager)
+│   │   ├── tools/              # Sandboxed deterministic tools (yfinance indicators, ATR)
+│   │   ├── nodes/              # Cognitive agent node definitions
+│   │   └── runner.py           # Multi-agent orchestration execution pipeline
+│   ├── services/               # Market data charting & trade status auditor
+│   ├── api/                    # Web Gateway & FastAPI routers (/api/v1/...)
+│   └── main.py                 # Core FastAPI application definition & lifespan
+├── front-end/                  # Frontend Portal Assets
+│   ├── index.html              # Single-page operator portal
+│   └── static/                 # Real-time React 18 UI dashboard & styles
+├── run.py                      # Local development CLI runner
+├── pyproject.toml              # UV project & dependency specifications
 └── README.md                   # System documentation
 ```
 
