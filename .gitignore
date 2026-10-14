@@ -44,3 +44,5 @@ uv.lock
 # OS
 .DS_Store
 Thumbs.db
+trading_history.xlsx
+visuals_showcase.py
