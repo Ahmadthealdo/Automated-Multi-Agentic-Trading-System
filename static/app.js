@@ -196,9 +196,6 @@ function AuthPortal({ onLoginSuccess }) {
                 throw new Error(data.detail || "Credentials verification failed.");
             }
 
-            if (data.access_token) {
-                sessionStorage.setItem("access_token", data.access_token);
-            }
             sessionStorage.setItem("active_operator", JSON.stringify(data.operator));
             onLoginSuccess(data.operator);
         } catch (err) {
@@ -485,10 +482,7 @@ function Dashboard({ operator, onSignOut }) {
     // Retrieve Audit History records
     const fetchHistory = async () => {
         try {
-            const token = sessionStorage.getItem("access_token");
-            const res = await fetch("/api/history", {
-                headers: token ? { "Authorization": `Bearer ${token}` } : {}
-            });
+            const res = await fetch("/api/history");
             if (res.ok) {
                 const data = await res.json();
                 setAudits(data);
@@ -540,13 +534,9 @@ function Dashboard({ operator, onSignOut }) {
         };
 
         try {
-            const token = sessionStorage.getItem("access_token");
             const response = await fetch("/api/trade", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    ...(token ? { "Authorization": `Bearer ${token}` } : {})
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
             });
 
@@ -1019,7 +1009,6 @@ function App() {
 
     const handleSignOut = () => {
         sessionStorage.removeItem("active_operator");
-        sessionStorage.removeItem("access_token");
         setOperator(null);
     };
 
